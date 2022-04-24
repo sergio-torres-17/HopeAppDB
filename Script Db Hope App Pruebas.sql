@@ -277,12 +277,16 @@ set @existeSintoma = (select if(count(*) >0, 1,0) from sintomas where descripcio
 	`hora_sintoma`,
 	`detalles_adicionales`)
 	VALUES
-	(id_usuario_,
+	(id_paciente_,
 	@maxIdSintoma,
 	@idIntensidad,
     fecha_,
 	hora_,
 	detalles_adicionales_);
+    SET @nombre_usuario = (select concat(us.nombre, ' ',us.apellidos) from usuarios us inner join pacientes p on us.id =p.id_usuario where p.id = id_paciente_);
+    SET @descripcion = concat('Se insertó el sintoma "', descripcion_,'" con la intensidad: "',descripcion_intensidad,'" para el paciente con el Nombre: "',@nombre_usuario,'"');
+    SET @id_usuario_ejecutante = (select fn_Buscar_Id_Usuario_Por_Nombre(@nombre_usuario));
+    CALL sp_InsertarLog(@descripcion ,@id_usuario_ejecutante);
     select 1 'status', 'El sintoma fue registrado correctamente.';
 end;//
 delimiter //
@@ -519,6 +523,12 @@ returns varchar(100)
 begin
 return (select concat(us.nombre, ' ',us.apellidos) from usuarios us inner join doctores dr on dr.id_usuario = us.id
 							where (dr.cedula = cedula_o_correo or us.email = cedula_o_correo) );
+end;//
+delimiter //
+create function fn_Buscar_Id_Usuario_Por_Nombre(nombre_completo_ varchar(100))
+returns bigint
+begin
+return (select id from usuarios where concat(nombre,' ',apellidos) = nombre_completo_);
 end;//
 delimiter //
 create function fn_Get_Id_Usuario_IdDoctor(IdMedico bigint)
