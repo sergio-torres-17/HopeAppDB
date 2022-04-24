@@ -244,7 +244,7 @@ end;//
 -- Insertar sintomas
 drop  procedure sp_insertar_sintoma_usuario;
 delimiter //
-create procedure sp_insertar_sintoma_usuario(descripcion_  text, fecha_ date,hora_ time, id_usuario_ bigint, descripcion_intensidad varchar(30), detalles_adicionales_ text)
+create procedure sp_insertar_sintoma_usuario(descripcion_  text, fecha_ date,hora_ time, id_paciente_ bigint, descripcion_intensidad varchar(30), detalles_adicionales_ text)
 begin
 set @existeSintoma = (select if(count(*) >0, 1,0) from sintomas where descripcion = descripcion_);
 	set @existeIntensidad = (select if(count(*) >0, 1,0) from intensidad_sintomas where descripcion = descripcion_intensidad);
