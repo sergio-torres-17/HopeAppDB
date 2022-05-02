@@ -85,6 +85,15 @@ fecha_alta_tutela datetime not null,
 fecha_baja_tutela datetime,
 primary key(id)
 );
+create table citas_paciente_doctor(
+id int auto_increment,
+id_doctor bigint,
+id_paciente bigint,
+fecha date not null,
+hora time not null,
+descripcion text not null,
+primary key(id)
+);
 /***************************Llaves primarias**********************/
 alter table sintomas_pacientes
 add foreign key (id_paciente) references pacientes(id),
@@ -106,6 +115,10 @@ alter table pacientes
 add foreign key (id_tipo_cancer) references tipos_cancer(id);
 alter table pacientes
 add foreign key (id_usuario) references usuarios(id);
+alter table citas_paciente_doctor
+add foreign key (id_doctor) references doctores(id);
+alter table citas_paciente_doctor
+add foreign key (id_paciente) references pacientes(id);
 /********************SP de inserción**********************/
 -- Funcion de corrección de hora
 delimiter //
@@ -137,6 +150,7 @@ begin
     INSERT INTO `usuarios_log`(`id_log`,`id_usuario`) VALUES(@maxIdLog,id_usuario);
 end;//
 -- Insercion de usuario
+
 delimiter //
 create procedure sp_Insertar_Medico(nombre_ varchar(50), apellidos_ varchar(50), edad_ int, email_ longtext, pass_ longtext, cedula_ varchar(100), 
 	especialidad_ varchar(30), estudios_ varchar(100), rutaHistorial_ text, rutaCertificado text ,rutaImgPerfil text ,idEjecutante bigint)
@@ -181,14 +195,14 @@ begin
 		rutaCertificado);
         set @descripcion = concat('Se insertó un nuevo médico con cedula profesional: ', cedula_);
         call sp_InsertarLog(@descripcion,idEjecutante);
-		select 1, concat('El Doctor ',nombre_,' se insertó correctamente');
+		select 1 'status', concat('El Doctor ',nombre_,' se insertó correctamente') 'msg';
 	else
-		select -1, concat('El Doctor ',nombre_,' ya está registrado.');
+		select -1 'status', concat('El Doctor ',nombre_,' ya está registrado.') 'msg';
     end if;
 end//
 -- Insertar paciente
 delimiter //
-create procedure sp_Insertar_Paciente(nombre_ varchar(50), apellidos_ varchar(50), edad_ int, email_ longtext, pass_ longtext, tipo_cancer_ varchar(150), etapa_ varchar(60), ruta_ varchar(600),idEjecutante bigint)
+create procedure sp_Insertar_Paciente(nombre_ varchar(50), apellidos_ varchar(50), edad_ int, email_ longtext, pass_ longtext, tipo_cancer_ varchar(150), etapa_ varchar(60), ruta_exp varchar(600),ruta_foto varchar(600),idEjecutante bigint)
 begin
 	set @idUsuario = 1,
     @existeUsuario = (select if(count(*) >0,0,1) from usuarios where (nombre = nombre_ and apellidos = apellidos_ and edad = edad_ and email = email_)),
@@ -206,6 +220,7 @@ begin
 		`edad`,
 		`email`,
 		`password`,
+        `ruta_foto`,
 		`fecha_alta`)
 		VALUES(
 		@idUsuario,
@@ -214,6 +229,7 @@ begin
 		edad_,
 		email_,
 		pass_,
+        ruta_foto,
 		fn_Hora_Actual());
         
         INSERT INTO `pacientes`
@@ -221,12 +237,12 @@ begin
 		`id_etapa`,
 		`id_tipo_cancer`,
 		`ruta_expediente`)
- values(@idUsuario, @idEtapa, @idTipoCancer, ruta_);
+ values(@idUsuario, @idEtapa, @idTipoCancer, ruta_foto);
         set @descripcion = concat('Se insertó un nuevo paciente con el nombre: ', nombre_);
         call sp_InsertarLog(@descripcion,idEjecutante);
-		select 1, concat('El paciente ',nombre_,' se insertó correctamente');
+		select 1 'status', concat('El paciente ',nombre_,' se insertó correctamente') 'msg';
 	else
-		select -1, concat('El Paciente ',nombre_,' ya está registrado.');
+		select -1 'status', concat('El Paciente ',nombre_,' ya está registrado.') 'msg';
     end if;
 end//
 -- Insertar intensidad sintoma
@@ -394,6 +410,26 @@ begin
         CALL `sp_InsertarLog`(@descripcion, id_ejecutante);
     commit;
 end;//
+delimiter //
+create procedure sp_InsertarCita(nombre_doctor varchar(100), nombre_paciente varchar(100), fecha_ date, hora_ time,descripcion_ text)
+begin
+	set @idDoctor = (select id from usuarios where concat(nombre, ' ',apellidos) like concat('%',nombre_doctor,'%'));
+    set @idPaciente = (select id from usuarios where concat(nombre, ' ',apellidos) like concat('%',nombre_paciente,'%'));
+    set @existeCita = (select if(count(*)>0,1,0) from citas_paciente_doctor where id_doctor = @idDoctor and fecha = fecha_ and hora = hora_);
+    
+    if existeCita = 1 then
+		INSERT INTO citas_paciente_doctor(`id_doctor`,`id_paciente`,`fecha`,`hora`,`descripcion`)
+		VALUES (@idDoctor,@idPaciente,fecha_,hora_,descripcion_);
+		set @descripcion = concat('Cita insertada el día ', fecha_,' a las ',hora_,' del doctor ', nombre_doctor, ' con ',nombre_paciente);
+		call sp_InsertarLog(@descripcion,idEjecutante);
+        select 1 'status', 'Cita registrada correctamente' 'Status';
+	else 
+		select -1 'status', 'Ya hay una cita registrada a esa hora' 'Status';
+    end if;
+    
+    
+end//
+
 /***********************SP's para ver datos**********************/
 -- Sp para el login de los doctores
 delimiter //
@@ -445,7 +481,7 @@ end;//
 delimiter //
 create procedure sp_Traer_Info_PosLogin_medico(email_cedula varchar(100))
 begin
-select dc.id 'Id Doctor',concat(us.nombre,' ',us.apellidos) 'Nombre completo', us.edad 'Edad', dc.cedula ,ec.nombre_estatus 'Estatus', us.email 'Email',us.ruta_foto 'Ruta Foto', 
+select us.id 'id_usuario',dc.id 'IdDoctor',us.nombre 'nombre', us.apellidos 'apellidos',us.edad 'Edad', dc.cedula ,ec.nombre_estatus 'Estatus', us.email 'Email',us.ruta_foto 'RutaFoto', 
 cast(us.fecha_alta as date) 'Fecha alta' from doctores dc
 inner join usuarios us on us.id = dc.id_usuario
 inner join estatus_conexion ec on ec.id = dc.id_estatus where us.email = email_cedula or dc.cedula = email_cedula;
