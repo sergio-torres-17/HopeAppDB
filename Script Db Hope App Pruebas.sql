@@ -417,17 +417,15 @@ begin
     set @idPaciente = (select id from usuarios where concat(nombre, ' ',apellidos) like concat('%',nombre_paciente,'%'));
     set @existeCita = (select if(count(*)>0,1,0) from citas_paciente_doctor where id_doctor = @idDoctor and fecha = fecha_ and hora = hora_);
     
-    if existeCita = 1 then
+    if @existeCita = 1 then
 		INSERT INTO citas_paciente_doctor(`id_doctor`,`id_paciente`,`fecha`,`hora`,`descripcion`)
 		VALUES (@idDoctor,@idPaciente,fecha_,hora_,descripcion_);
 		set @descripcion = concat('Cita insertada el día ', fecha_,' a las ',hora_,' del doctor ', nombre_doctor, ' con ',nombre_paciente);
-		call sp_InsertarLog(@descripcion,idEjecutante);
+		call sp_InsertarLog(@descripcion,@idEjecutante);
         select 1 'status', 'Cita registrada correctamente' 'Status';
 	else 
 		select -1 'status', 'Ya hay una cita registrada a esa hora' 'Status';
     end if;
-    
-    
 end//
 
 /***********************SP's para ver datos**********************/
@@ -479,6 +477,15 @@ begin
     end if;
 end;//
 delimiter //
+create procedure sp_Traer_Info_PosLogin_Pacientes(correo_ longtext)
+begin
+	select us.id 'id_usuario',pa.id 'idPaciente', us.nombre, us.apellidos, us.edad, us.email, ec.nombre_etapa 'etapa_cancer', tc.nombre_tipo 'tipo_cancer' from usuarios us
+    inner join pacientes pa on pa.id_usuario = us.id
+    inner join etapas_cancer ec on ec.id = pa.id_etapa
+    inner join tipos_cancer tc on tc.id = pa.id_tipo_cancer
+    where email = correo_;
+end;//
+delimiter //
 create procedure sp_Traer_Info_PosLogin_medico(email_cedula varchar(100))
 begin
 select us.id 'id_usuario',dc.id 'IdDoctor',us.nombre 'nombre', us.apellidos 'apellidos',us.edad 'Edad', dc.cedula ,ec.nombre_estatus 'Estatus', us.email 'Email',us.ruta_foto 'RutaFoto', 
@@ -486,6 +493,15 @@ cast(us.fecha_alta as date) 'Fecha alta' from doctores dc
 inner join usuarios us on us.id = dc.id_usuario
 inner join estatus_conexion ec on ec.id = dc.id_estatus where us.email = email_cedula or dc.cedula = email_cedula;
 end;//
+DELIMITER $$
+CREATE  PROCEDURE `sp_Traer_Info_PosLogin_Pacientes`(correo_ longtext)
+begin
+	select us.id 'id_usuario',pa.id 'idPaciente', us.nombre, us.apellidos, us.edad, us.email, ec.nombre_etapa 'etapa_cancer', tc.nombre_tipo 'tipo_cancer' from usuarios us
+    inner join pacientes pa on pa.id_usuario = us.id
+    inner join etapas_cancer ec on ec.id = pa.id_etapa
+    inner join tipos_cancer tc on tc.id = pa.id_tipo_cancer
+    where email = correo_;
+end$$
 delimiter //
 create procedure sp_Ver_Sintomas_Pacientes_Por_Fecha(id_paciente_ bigint, nombre_paciente_ varchar(100), fecha_inicio date, fecha_fin date)
 begin
@@ -538,6 +554,27 @@ inner join intensidad_sintomas ins on sp.id_intensidad = ins.id
 inner join vw_pacientes vp on vp.id = sp.id_paciente
 where concat(vp.nombre,' ',vp.apellidos) = nombre_paciente_ or vp.id = id_paciente_;
 end;//
+DELIMITER $$
+CREATE PROCEDURE `sp_Login_Pacientes`(correo_ longtext, pass longtext)
+begin
+	set @numFilas = (select if(us.id is not null and pc.id is not null, 1 ,0) 'Resultado' from usuarios us
+	inner join pacientes pc on pc.id_usuario = us.id
+	where us.email = correo_ and us.password = pass);
+	set @nombre_paciente = (select fn_Obtener_Nombre_Paciente(correo_));
+
+	if @numFilas = 1 then
+		set @idPaciente = (select fn_Obtener_Id_Paciente_Por_Nombre(@nombre_paciente));
+		set @idUsuario = (select fn_Get_Id_Usuario_IdPaciente(@idPaciente));
+		set @descripcion = concat('Se inició sesión para el paciente "', @nombre_paciente,'"');
+		
+		CALL sp_InsertarLog(@descripcion, @idUsuario);
+		select 1 'Rsp', concat('Bienvenido Paciente ', @nombre_paciente) 'Msg';
+	else
+		set @descripcion = concat('Se Intento iniciar sesión para el paciente "', @nombre_paciente,'". El usuario o la contraseña no son correctas.');
+		CALL sp_InsertarLog(@descripcion, @idUsuario);
+		select -1 'Rsp', concat('El usuario no existe o las credenciales no son correctas') 'Msg';
+	end if;
+end$$
 /*****************************Funciones******************************/
 delimiter //
 create function fn_Obtener_Id_Doctor_Por_Nombre(nombre_completo varchar(100))
@@ -584,8 +621,47 @@ delimiter //
 create function fn_verificar_si_existe_usuario(nombre_ varchar(50), apellidos_ varchar(50), 
 email_ longtext)
 returns bit
-return (select if(count(*)>0, 1, 0) 'resultado' from usuarios where nombre =nombre_ and apellidos = apellidos_ and email = email_);
+return (select if(count(*)>0, 'true','false') 'resultado' from usuarios where nombre =nombre_ and apellidos = apellidos_ and email = email_);
 //
+delimiter //
+create function fn_buscar_Tipo_Usuario(email_ longtext)
+returns varchar(25)
+begin
+return (select if(dc.id is not null ,'doctor',if(pc.id is not null,'paciente', if(count(us.id)>0, 'Administrador', 'No existe'))) from usuarios us
+left join doctores dc on us.id = dc.id_usuario
+left join pacientes pc on pc.id_usuario = us.id 
+where us.email = email_);
+end;//
+create function fn_buscar_Tipo_Usuario(email_ longtext)
+returns varchar(25)
+begin
+return (select if(dc.id is not null ,'doctor',if(pc.id is not null,'paciente', if(us.id is not null, 'Administrador', 'No existe'))) from usuarios us
+left join doctores dc on us.id = dc.id_usuario
+left join pacientes pc on pc.id_usuario = us.id 
+where us.email = email_);
+end;//
+DELIMITER $$
+CREATE FUNCTION `fn_Get_Id_Usuario_IdPaciente`(IdPaciente bigint) RETURNS bigint(20)
+begin
+set @idUsuario = (select id_usuario from pacientes where id = IdPaciente);
+return @idUsuario;
+end$$
+DELIMITER $$
+CREATE FUNCTION `fn_buscar_Tipo_Usuario`(email_ longtext) RETURNS varchar(25) 
+begin
+return (select if(dc.id is not null ,'doctor',if(pc.id is not null,'paciente', if(count(us.id)>0, 'Administrador', 'No existe'))) from usuarios us
+left join doctores dc on us.id = dc.id_usuario
+left join pacientes pc on pc.id_usuario = us.id 
+where us.email = email_);
+end$$
+
+DELIMITER $$
+CREATE FUNCTION `fn_Obtener_Nombre_Paciente`(correo_ varchar(25)) RETURNS varchar(120) CHARSET utf8mb4
+begin
+return (select concat(us.nombre, ' ',us.apellidos) from usuarios us inner join pacientes pc on pc.id_usuario = us.id
+							where (us.email = correo_) );
+end$$
+DELIMITER ;
 /**********************************Insertar valores iniciales***********************/
 -- Insertar administrador maestro
 INSERT INTO `usuarios`(`id`,`nombre`,`apellidos`,`edad`,`email`,`password`,`ruta_foto`,`fecha_alta`) VALUES(1,'Administrador','Maestro',21,'admin@hopeapp.com',(select sha1('12345')),'/Archivos/Admin/FP_AdminMaster.png',fn_Hora_Actual());
