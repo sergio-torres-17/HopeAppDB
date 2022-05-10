@@ -150,7 +150,6 @@ begin
     INSERT INTO `usuarios_log`(`id_log`,`id_usuario`) VALUES(@maxIdLog,id_usuario);
 end;//
 -- Insercion de usuario
-
 delimiter //
 create procedure sp_Insertar_Medico(nombre_ varchar(50), apellidos_ varchar(50), edad_ int, email_ longtext, pass_ longtext, cedula_ varchar(100), 
 	especialidad_ varchar(30), estudios_ varchar(100), rutaHistorial_ text, rutaCertificado text ,rutaImgPerfil text ,idEjecutante bigint)
@@ -195,9 +194,9 @@ begin
 		rutaCertificado);
         set @descripcion = concat('Se insertó un nuevo médico con cedula profesional: ', cedula_);
         call sp_InsertarLog(@descripcion,idEjecutante);
-		select 1 'status', concat('El Doctor ',nombre_,' se insertó correctamente') 'msg';
+		select 1 'Rsp', concat('El Doctor ',nombre_,' se insertó correctamente') 'Msg';
 	else
-		select -1 'status', concat('El Doctor ',nombre_,' ya está registrado.') 'msg';
+		select -1 'Rsp', concat('El Doctor ',nombre_,' ya está registrado.') 'Msg';
     end if;
 end//
 -- Insertar paciente
@@ -240,9 +239,9 @@ begin
  values(@idUsuario, @idEtapa, @idTipoCancer, ruta_foto);
         set @descripcion = concat('Se insertó un nuevo paciente con el nombre: ', nombre_);
         call sp_InsertarLog(@descripcion,idEjecutante);
-		select 1 'status', concat('El paciente ',nombre_,' se insertó correctamente') 'msg';
+		select 1 'Rsp', concat('El paciente ',nombre_,' se insertó correctamente') 'Msg';
 	else
-		select -1 'status', concat('El Paciente ',nombre_,' ya está registrado.') 'msg';
+		select -1 'Rsp', concat('El Paciente ',nombre_,' ya está registrado.') 'Msg';
     end if;
 end//
 -- Insertar intensidad sintoma
